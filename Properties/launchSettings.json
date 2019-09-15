@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "OrcaBotScheduledUpdate": {
+      "commandName": "Project",
+      "commandLineArgs": "-p \"E:\\2019-Q3\\OrcaBotScheduledUpdate\\TestPath\" -v -b"
+    }
+  }
+}
