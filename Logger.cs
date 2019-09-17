@@ -5,8 +5,11 @@ using System.IO;
 
 namespace OrcaBotScheduledUpdate
 {
-    class Logger
+    public sealed class Logger
     {
+        private static Logger instance = null;
+        private static readonly object padlock = new object();
+
         public enum MessageType
         {
             Verbose,
@@ -15,14 +18,31 @@ namespace OrcaBotScheduledUpdate
             Error,
             Critical
         }
-
-
+        public static Logger Instance {
+            get {
+                lock (padlock) {
+                    if(instance == null) {
+                        instance = new Logger();
+                    }
+                    return instance;
+                }
+            }
+        }
+        private bool createLog;
         private bool printVerbose;
-        public String fileName { get; }
+        public String fileName;
         private Uri fileLocation;
 
-        public Logger(Uri pathToFolder, bool _printVerbose) {
+        Logger() {
+
+        }
+
+        public void Init(Uri pathToFolder, bool _printVerbose, bool _createLog) {
+            createLog = _createLog;
             printVerbose = _printVerbose;
+            if (!createLog) {
+                return;
+            }
             if (!Directory.Exists(pathToFolder.AbsolutePath)) {
                 Directory.CreateDirectory(pathToFolder.AbsolutePath);
             }
@@ -35,7 +55,10 @@ namespace OrcaBotScheduledUpdate
         }
 
         public void Write(string message,MessageType mt) {
-            WriteToFile(message, mt);
+            if (createLog) {
+                WriteToFile(message, mt);
+            }
+            
             if(!printVerbose && mt == MessageType.Verbose) {
                 return;
             }

@@ -30,42 +30,41 @@ namespace OrcaBotScheduledUpdate
     }
     class OptionsValidator
     {
-        public OptionsValidator(Options options,Logger logger) {
-            logger.Write("Starting Parameter Validation", Logger.MessageType.Verbose);
+        public OptionsValidator(Options options) {
+            Logger.Instance.Write("Starting Parameter Validation", Logger.MessageType.Verbose);
 
             if (IsURLValid(options.StationURL)) {
-                logger.Write("Station URL is valid: " + options.StationURL, Logger.MessageType.Verbose);
+                Logger.Instance.Write("Station URL is valid: " + options.StationURL, Logger.MessageType.Verbose);
             }
             else {
-                logger.Write("Station URL is not valid: " + options.StationURL, Logger.MessageType.Critical);
+                Logger.Instance.Write("Station URL is not valid: " + options.StationURL, Logger.MessageType.Critical);
                 throw new Exception("Invalid Station URL");
             }
             if (IsURLValid(options.PopulatedSystemsURL)) {
-                logger.Write("Populated Systems URL is valid: " + options.PopulatedSystemsURL, Logger.MessageType.Verbose);
+                Logger.Instance.Write("Populated Systems URL is valid: " + options.PopulatedSystemsURL, Logger.MessageType.Verbose);
             }
             else {
-                logger.Write("Populated Systems URL is not valid: " + options.PopulatedSystemsURL, Logger.MessageType.Critical);
+                Logger.Instance.Write("Populated Systems URL is not valid: " + options.PopulatedSystemsURL, Logger.MessageType.Critical);
                 throw new Exception("Invalid Station URL");
             }
             if (IsValidDirectory(options.Path)) {
-                logger.Write("Given path is valid: " + options.Path, Logger.MessageType.Verbose);
+                Logger.Instance.Write("Given path is valid: " + options.Path, Logger.MessageType.Verbose);
                 if (!Directory.Exists(options.Path)) {
-                    logger.Write("Directory does not exists. Creating directory " + options.Path, Logger.MessageType.Warning);
+                    Logger.Instance.Write("Directory does not exists. Creating directory " + options.Path, Logger.MessageType.Warning);
                     Directory.CreateDirectory(options.Path);
                 }
                 else {
-                    logger.Write("Directory exists: " + options.Path, Logger.MessageType.Verbose);
+                    Logger.Instance.Write("Directory exists: " + options.Path, Logger.MessageType.Verbose);
                 }
             }
             else {
-                logger.Write("Given path is invalid, cannot proceed. " + options.Path, Logger.MessageType.Critical);
+                Logger.Instance.Write("Given path is invalid, cannot proceed. " + options.Path, Logger.MessageType.Critical);
                 throw new Exception("Given path invalid");
             }
         }
 
         public bool IsURLValid(string url) {
-            Uri u;
-            return Uri.TryCreate(url, UriKind.Absolute, out u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
+            return Uri.TryCreate(url, UriKind.Absolute, out Uri u) && (u.Scheme == Uri.UriSchemeHttp || u.Scheme == Uri.UriSchemeHttps);
         }
         public bool IsValidDirectory(string path) {
             try {

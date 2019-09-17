@@ -2,15 +2,17 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-
+using System.IO.Compression;
+using System.Net;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Formatters.Binary;
 
 namespace OrcaBotScheduledUpdate
 {
     class Program
     {
-        static Logger logger;
         static Options options;
-        static Dictionary<string, int> SystemsDict;
+
         static void Main(string[] args) {
             //Set the Options for the Task
             
@@ -26,9 +28,9 @@ namespace OrcaBotScheduledUpdate
             }
             else {
                 options = ((Parsed<Options>)parserResult).Value;
-                logger = new Logger(new Uri(new Uri(Environment.CurrentDirectory),"logs"), options.Verbose);
+                Logger.Instance.Init(new Uri(new Uri(Environment.CurrentDirectory), "logs"), options.Verbose, options.Log);
                 try {
-                    OptionsValidator ov = new OptionsValidator(options, logger);
+                    OptionsValidator ov = new OptionsValidator(options);
                 }
                 catch(Exception e) {
                     HandleException(e, true);
@@ -37,7 +39,7 @@ namespace OrcaBotScheduledUpdate
                     var files = Directory.GetFiles(options.Path);
                     if (files.Length > 0) {
                         DirectoryInfo source = new DirectoryInfo(options.Path);
-                        string destPath = new Uri(new Uri(Environment.CurrentDirectory), Path.Combine("backups" , logger.fileName)).AbsolutePath;
+                        string destPath = new Uri(new Uri(Environment.CurrentDirectory), Path.Combine("backups" , Logger.Instance.fileName)).AbsolutePath;
                         if (!Directory.Exists(destPath)) {
                             Directory.CreateDirectory(destPath);
                         }
@@ -45,41 +47,71 @@ namespace OrcaBotScheduledUpdate
                         //Copy each file (no recursion)
                         foreach (FileInfo fi in source.GetFiles()) {
                             fi.CopyTo(Path.Combine(destination.FullName, fi.Name), true);
-                            logger.Write(String.Format("Copied {0} to {1}", fi.FullName, Path.Combine(destination.FullName, fi.Name)), Logger.MessageType.Verbose);
+                            Logger.Instance.Write(String.Format("Copied {0} to {1}", fi.FullName, Path.Combine(destination.FullName, fi.Name)), Logger.MessageType.Verbose);
                         }
 
                     }
                     else {
-                        logger.Write("BackUp flag set, but no files under path found, no backup created.", Logger.MessageType.Info);
+                        Logger.Instance.Write("BackUp flag set, but no files under path found, no backup created.", Logger.MessageType.Info);
                     }
                 }
                 
                 //Now, download both required files, store them in the temp location
                 try {
-                    string stationsResponse;
-                    string populatedSystemsResponse;
+                    string stationsFile = Path.GetTempFileName();
+                    string populatedFile = Path.GetTempFileName();
                     try {
-                        logger.Write("Trying to download necessary files", Logger.MessageType.Verbose);
-                        using (var wc = new System.Net.WebClient()) {
-
-                            stationsResponse = wc.DownloadString(options.StationURL);
-                            logger.Write("1/2 files done.", Logger.MessageType.Verbose);
-                            populatedSystemsResponse = wc.DownloadString(options.PopulatedSystemsURL);
-                            logger.Write("2/2 files done.", Logger.MessageType.Verbose);
-
+                        Logger.Instance.Write("Trying to download necessary files", Logger.MessageType.Verbose);
+                        var req1 = WebRequest.CreateHttp(options.PopulatedSystemsURL);
+                        var req2 = WebRequest.CreateHttp(options.StationURL);
+                        req1.AutomaticDecompression = req2.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+                        using(var resp1 = req1.GetResponse()) {
+                            using (var stream = resp1.GetResponseStream())
+              
+                            using (var fs = new FileStream(populatedFile, FileMode.OpenOrCreate)) {
+                                stream.CopyTo(fs);
+                            }    
+                            
+                        }
+                        using (var resp2 = req2.GetResponse()) {
+                            using (var stream = resp2.GetResponseStream())
+                            using (var fs = new FileStream(stationsFile, FileMode.OpenOrCreate)) {
+                                stream.CopyTo(fs);
+                            }
 
                         }
+
                     }
                     catch {
-                        logger.Write("Failed to download files", Logger.MessageType.Error);
+                        Logger.Instance.Write("Failed to download files", Logger.MessageType.Error);
                         throw;
                     }
-                    logger.Write("Finished download...", Logger.MessageType.Info);
-                    JSONParser.Parse(stationsResponse, populatedSystemsResponse);
+                    Logger.Instance.Write("Finished download...", Logger.MessageType.Info);
+                    var dictionary = JSONParser.Parse(stationsFile, populatedFile);
+                    //Generate a JSON out of the dict
+                    {
+                        string json = JSONParser.Stringify(dictionary);
+                        File.WriteAllText(Path.Combine(options.Path, "populatedSystemsWithStations.json"), json);
+                        Logger.Instance.Write("Finished creating output json. It can be found at " + Path.Combine(options.Path, "populatedSystemsWithStations.json"), Logger.MessageType.Info);
+                    }
+                    //Generate the Serialized Object
+                    {
+                        IFormatter formatter = new BinaryFormatter();
+                        Stream stream = new FileStream(Path.Combine(options.Path, "populatedSystemsWithStations.bin"), FileMode.Create, FileAccess.Write, FileShare.None);
+                        formatter.Serialize(stream, dictionary);
+                        stream.Close();
+                        Logger.Instance.Write("Finished creating output serialized binary file. It can be found at " + Path.Combine(options.Path, "populatedSystemsWithStations.bin"), Logger.MessageType.Info);
 
-                    
+                    }
+                    Logger.Instance.Write("The program has successfully reached its end. Press any key to exit...", Logger.MessageType.Info);
+                    Environment.Exit(0);
+
+
+
+
+
                 }
-                catch(Exception e) {
+                catch(OutOfMemoryException e) {
                     HandleException(e, true);
                 }
 
@@ -91,7 +123,7 @@ namespace OrcaBotScheduledUpdate
             
         }
         static void HandleException(Exception e,bool killApp = false) {
-            logger.Write("An exception has been thrown. Please check the logs under " + (new Uri(new Uri(Environment.CurrentDirectory), "logs\t\t" + e.Message)), Logger.MessageType.Critical);
+            Logger.Instance.Write("An exception has been thrown. Please check the logs under " + (new Uri(new Uri(Environment.CurrentDirectory), "logs\t\t" + e.Message)), Logger.MessageType.Critical);
             if (killApp) {
                 Console.ReadKey();
                 Environment.Exit(-1);
