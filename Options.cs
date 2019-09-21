@@ -33,20 +33,19 @@ namespace OrcaBotScheduledUpdate
         public OptionsValidator(Options options) {
             Logger.Instance.Write("Starting Parameter Validation", Logger.MessageType.Verbose);
 
-            if (IsURLValid(options.StationURL)) {
-                Logger.Instance.Write("Station URL is valid: " + options.StationURL, Logger.MessageType.Verbose);
-            }
-            else {
-                Logger.Instance.Write("Station URL is not valid: " + options.StationURL, Logger.MessageType.Critical);
+         
+            var stationURLValid = IsURLValid(options.StationURL);
+            Logger.Instance.Write("Station URL is " + ((stationURLValid) ? "" : "not ") + "valid", (stationURLValid) ? Logger.MessageType.Verbose : Logger.MessageType.Critical);
+            if (!stationURLValid)
                 throw new Exception("Invalid Station URL");
-            }
-            if (IsURLValid(options.PopulatedSystemsURL)) {
-                Logger.Instance.Write("Populated Systems URL is valid: " + options.PopulatedSystemsURL, Logger.MessageType.Verbose);
-            }
-            else {
-                Logger.Instance.Write("Populated Systems URL is not valid: " + options.PopulatedSystemsURL, Logger.MessageType.Critical);
-                throw new Exception("Invalid Station URL");
-            }
+
+
+            var systemsURLValid = IsURLValid(options.PopulatedSystemsURL);
+            Logger.Instance.Write("Populated Systems URL is " + ((systemsURLValid) ? "" : "not ") + "valid", (stationURLValid) ? Logger.MessageType.Verbose : Logger.MessageType.Critical);
+            if (!systemsURLValid)
+                throw new Exception("Invalid Populated Systems URL");
+
+
             if (IsValidDirectory(options.Path)) {
                 Logger.Instance.Write("Given path is valid: " + options.Path, Logger.MessageType.Verbose);
                 if (!Directory.Exists(options.Path)) {
