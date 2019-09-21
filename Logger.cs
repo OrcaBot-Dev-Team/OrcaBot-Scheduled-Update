@@ -40,15 +40,16 @@ namespace OrcaBotScheduledUpdate
         public void Init(Uri pathToFolder, bool _printVerbose, bool _createLog) {
             createLog = _createLog;
             printVerbose = _printVerbose;
+            uint epoch = (uint)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
+            fileName = epoch.ToString();
+            fileLocation = new Uri(Path.Combine(pathToFolder.AbsolutePath, fileName + ".log"));
             if (!createLog) {
                 return;
             }
             if (!Directory.Exists(pathToFolder.AbsolutePath)) {
                 Directory.CreateDirectory(pathToFolder.AbsolutePath);
             }
-            uint epoch = (uint)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds;
-            fileName = epoch.ToString() ;
-            fileLocation = new Uri(Path.Combine(pathToFolder.AbsolutePath, fileName+".log"));
+           
        
 
 

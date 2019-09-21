@@ -42,9 +42,10 @@ namespace OrcaBotScheduledUpdate
 {
     static class JSONParser
     {
+        static List<string> ErrorLog = new List<string>();
         public static Dictionary<string, Model.System> Parse(string stationsFile, string populatedFile) {
             Dictionary<string, Model.System> systemDict = new Dictionary<string, Model.System>();
-            List<string> ErrorLog = new List<string>();
+        
            
             using(StreamReader sr = File.OpenText(populatedFile)) {
                 using (JsonReader jtr = new JsonTextReader(sr)) {
@@ -56,33 +57,11 @@ namespace OrcaBotScheduledUpdate
                     IList<JSONModel.System> result = js.Deserialize<List<JSONModel.System>>(jtr);
                     //Now create the proper dictionary entries out of the result, witout the stations for now, that is
                     foreach(var system in result) {
-                        if(system.name == null || system.x == null || system.y == null || system.z == null) {
-                            ErrorLog.Add("Could not add system " + system.name);
+                        var sys = ParseSystem(system);
+                        if(sys == null) {
                             continue;
                         }
-                        Model.Security securityId;
-                        if (system.security == null) {
-                            securityId = Model.Security.Unknown;
-                        }
-                        else {
-                            switch (system.security.ToLower()) {
-                                case "high":
-                                    securityId = Model.Security.High; break;
-                                case "medium":
-                                    securityId = Model.Security.Medium; break;
-                                case "low":
-                                    securityId = Model.Security.Low; break;
-                                case "anarchy":
-                                    securityId = Model.Security.Anarchy; break;
-                                default:
-                                    securityId = Model.Security.Unknown; break;
-                            }
-                        }
-                        systemDict[system.name.ToUpper()] = new Model.System() {
-                            Name = system.name,
-                            Position = new Tuple<float, float, float>(system.x, system.y, system.z),
-                            Security = securityId
-                        };
+                        systemDict[system.name.ToUpper()] = sys;
                         Logger.Instance.Write("Parsed system " + system.name, Logger.MessageType.Verbose);
                     }
                     result.Clear();
@@ -93,7 +72,6 @@ namespace OrcaBotScheduledUpdate
             }
            
             GC.Collect();
-            GC.WaitForFullGCComplete(2000);
             using (StreamReader sr = File.OpenText(stationsFile))
             using(JsonTextReader jtr = new JsonTextReader(sr)) {
                 JsonSerializerSettings jss = new JsonSerializerSettings {
@@ -107,12 +85,8 @@ namespace OrcaBotScheduledUpdate
                 foreach (var station in result) {
                     if(station.name == null || station.distanceToArrival == null || station.economy == null) {
                         //No point having these in the Dictionary if any of these are not in the JSON
-                        if(station.name != null) {
-                            ErrorLog.Add($"Could not add station {station.name} because of missing values");
-                        }
-                        else {
-                            ErrorLog.Add("Could not add station.");
-                        }
+                        string statName = (station.name == null) ? "a station" : $"the {station.name} station";
+                        ErrorLog.Add("Could not add " + statName);
                         continue;
                         
                     }
@@ -122,27 +96,13 @@ namespace OrcaBotScheduledUpdate
                     }
                     var economy = GetEconomy(station.economy);
                     var type = GetStationType(station.type);
-                    var facilities = GetFacilities(station.otherServices, economy, station.haveShipyard, station.haveOutfitting);
-                    Model.LandingPadSize landingPadSize;
-                    switch (type) {
-                        case Model.StationType.Asteroid_Base:
-                        case Model.StationType.Coriolis:
-                        case Model.StationType.Mega_Ship:
-                        case Model.StationType.Ocellus:
-                        case Model.StationType.Orbis:
-                        case Model.StationType.Surface_Station:
-                            landingPadSize = Model.LandingPadSize.Large; break;
-                        case Model.StationType.Outpost:
-                            landingPadSize = Model.LandingPadSize.Medium; break;
-                        default:
-                            landingPadSize = Model.LandingPadSize.None; break;
-                    }
+                            
                     var stationToAdd = new Model.Station() {
                         Name = station.name,
                         Economy = economy,
                         StationType = type,
-                        Facilities = facilities,
-                        PadSize = landingPadSize,
+                        Facilities = GetFacilities(station.otherServices, economy, station.haveShipyard, station.haveOutfitting),
+                        PadSize = GetLandingPadSize(type),
                         Distance = (float)station.distanceToArrival
                     };
                     systemDict[station.systemName.ToUpper()].Stations.Add(stationToAdd);
@@ -151,15 +111,8 @@ namespace OrcaBotScheduledUpdate
                 }
             }
 
-            if(ErrorLog.Count == 0) {
-                Logger.Instance.Write("No Errors found when parsing the data.", Logger.MessageType.Info);
-            }
-            else {
-                Logger.Instance.Write($"There were {ErrorLog.Count} Errors made. The according systems and stations have been ignored:", Logger.MessageType.Error);
-                foreach(var err in ErrorLog) {
-                    Logger.Instance.Write(err, Logger.MessageType.Error);
-                }
-            }
+            PrintErrorLog();
+           
             
             return systemDict;
             
@@ -203,6 +156,54 @@ namespace OrcaBotScheduledUpdate
                 default: return Model.StationType.Unknown;
             }
         }
+        private static Model.System ParseSystem(JSONModel.System sys) {
+            if(sys.name == null || sys.x == null|| sys.y == null || sys.z == null) {
+                ErrorLog.Add(("Could not add ") + ((sys.name == null) ? "a" : ($"the {sys.name}") + " system."));
+                return null;
+            }
+            return new Model.System() {
+                Name = sys.name,
+                Position = new Tuple<float, float, float>(sys.x, sys.y, sys.z),
+                Security = GetSecurityFromString(sys.security)
+            };
+        
+        }
+
+        private static Model.LandingPadSize GetLandingPadSize(Model.StationType st) {
+            switch (st) {
+                case Model.StationType.Asteroid_Base:
+                case Model.StationType.Coriolis:
+                case Model.StationType.Mega_Ship:
+                case Model.StationType.Ocellus:
+                case Model.StationType.Orbis:
+                case Model.StationType.Surface_Station:
+                   return Model.LandingPadSize.Large; 
+                case Model.StationType.Outpost:
+                    return Model.LandingPadSize.Medium; 
+                default:
+                   return Model.LandingPadSize.None; 
+            }
+        }
+
+        private static Model.Security GetSecurityFromString(string securityString) {
+            if (securityString == null) {
+                return Model.Security.Unknown;
+            }
+            else {
+                switch (securityString.ToLower()) {
+                    case "high":
+                        return Model.Security.High;
+                    case "medium":
+                        return Model.Security.Medium;
+                    case "low":
+                        return Model.Security.Low; 
+                    case "anarchy":
+                        return Model.Security.Anarchy;
+                    default:
+                        return Model.Security.Unknown; 
+                }
+            }
+        }
         /// <summary>
         /// 
         /// </summary>
@@ -234,16 +235,8 @@ namespace OrcaBotScheduledUpdate
                     return Model.Facilities.Unknown;
                 }
                 if (s.ToLower() == "material trader") {
-                    if (economy == Model.Economy.Refinery || economy == Model.Economy.Extraction) {
-                        return Model.Facilities.Trader_Raw;
-                    }
-                    if (economy == Model.Economy.Industrial) {
-                        return Model.Facilities.Trader_Manufactured;
-                    }
-                    if (economy == Model.Economy.High_Tech || economy == Model.Economy.Military) {
-                        return Model.Facilities.Trader_Encoded;
-                    }
-                    return Model.Facilities.Unknown;
+
+                    return GetMaterialTraderType();
                 }
                 switch (s.ToLower()) {
                     case "interstellar factors": return Model.Facilities.InterstellarFactors;
@@ -252,11 +245,35 @@ namespace OrcaBotScheduledUpdate
                     case "black market": return Model.Facilities.Black_Market;
                     default: return Model.Facilities.Unknown;
                 }
+                Model.Facilities GetMaterialTraderType() {
+                    switch (economy) {
+                        case Model.Economy.Refinery:
+                        case Model.Economy.Extraction:
+                            return Model.Facilities.Trader_Raw;
+                        case Model.Economy.Industrial:
+                            return Model.Facilities.Trader_Manufactured;
+                        case Model.Economy.High_Tech:
+                        case Model.Economy.Military:
+                            return Model.Facilities.Trader_Encoded;
+                        default:
+                            return Model.Facilities.Unknown;
+                    }
+                }
             }
 
         }
 
-       
+       private static void PrintErrorLog() {
+            if (ErrorLog.Count == 0) {
+                Logger.Instance.Write("No Errors found when parsing the data.", Logger.MessageType.Info);
+            }
+            else {
+                Logger.Instance.Write($"There were {ErrorLog.Count} Errors made. The according systems and stations have been ignored:", Logger.MessageType.Error);
+                foreach (var err in ErrorLog) {
+                    Logger.Instance.Write(err, Logger.MessageType.Error);
+                }
+            }
+        }
 
 
 
