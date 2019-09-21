@@ -58,29 +58,11 @@ namespace OrcaBotScheduledUpdate
                 
                 //Now, download both required files, store them in the temp location
                 try {
-                    string stationsFile = Path.GetTempFileName();
-                    string populatedFile = Path.GetTempFileName();
+                    string stationsFile;
+                    string populatedFile;
                     try {
-                        Logger.Instance.Write("Trying to download necessary files", Logger.MessageType.Verbose);
-                        var req1 = WebRequest.CreateHttp(options.PopulatedSystemsURL);
-                        var req2 = WebRequest.CreateHttp(options.StationURL);
-                        req1.AutomaticDecompression = req2.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                        using(var resp1 = req1.GetResponse()) {
-                            using (var stream = resp1.GetResponseStream())
-              
-                            using (var fs = new FileStream(populatedFile, FileMode.OpenOrCreate)) {
-                                stream.CopyTo(fs);
-                            }    
-                            
-                        }
-                        using (var resp2 = req2.GetResponse()) {
-                            using (var stream = resp2.GetResponseStream())
-                            using (var fs = new FileStream(stationsFile, FileMode.OpenOrCreate)) {
-                                stream.CopyTo(fs);
-                            }
-
-                        }
-
+                        stationsFile = new FileDownloader(options.StationURL).FilePath; 
+                        populatedFile = new FileDownloader(options.PopulatedSystemsURL).FilePath;
                     }
                     catch {
                         Logger.Instance.Write("Failed to download files", Logger.MessageType.Error);

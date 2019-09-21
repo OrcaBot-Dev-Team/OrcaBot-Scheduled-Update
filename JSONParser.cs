@@ -45,75 +45,39 @@ namespace OrcaBotScheduledUpdate
         static List<string> ErrorLog = new List<string>();
         public static Dictionary<string, Model.System> Parse(string stationsFile, string populatedFile) {
             Dictionary<string, Model.System> systemDict = new Dictionary<string, Model.System>();
-        
-           
-            using(StreamReader sr = File.OpenText(populatedFile)) {
-                using (JsonReader jtr = new JsonTextReader(sr)) {
-                    JsonSerializerSettings jss = new JsonSerializerSettings {
-                        NullValueHandling = NullValueHandling.Ignore,
-                        MissingMemberHandling = MissingMemberHandling.Ignore
-                    };
-                    JsonSerializer js = JsonSerializer.Create(jss);
-                    IList<JSONModel.System> result = js.Deserialize<List<JSONModel.System>>(jtr);
-                    //Now create the proper dictionary entries out of the result, witout the stations for now, that is
-                    foreach(var system in result) {
-                        var sys = ParseSystem(system);
-                        if(sys == null) {
-                            continue;
-                        }
-                        systemDict[system.name.ToUpper()] = sys;
-                        Logger.Instance.Write("Parsed system " + system.name, Logger.MessageType.Verbose);
-                    }
-                    result.Clear();
-                    Logger.Instance.Write("Finished parsing Systems", Logger.MessageType.Info);
 
-
-                }
-            }
-           
-            GC.Collect();
-            using (StreamReader sr = File.OpenText(stationsFile))
-            using(JsonTextReader jtr = new JsonTextReader(sr)) {
-                JsonSerializerSettings jss = new JsonSerializerSettings {
-                    NullValueHandling = NullValueHandling.Ignore,
-                    MissingMemberHandling = MissingMemberHandling.Ignore
-                };
-                JsonSerializer js = JsonSerializer.Create(jss);
-                IList<JSONModel.Station> result = js.Deserialize<List<JSONModel.Station>>(jtr);
-                //Now create the proper dictionary out of the result.
-                
-                foreach (var station in result) {
-                    if(station.name == null || station.distanceToArrival == null || station.economy == null) {
-                        //No point having these in the Dictionary if any of these are not in the JSON
-                        string statName = (station.name == null) ? "a station" : $"the {station.name} station";
-                        ErrorLog.Add("Could not add " + statName);
+            {
+                var result = GetJsonListFromFile<JSONModel.System>(populatedFile);
+                //Now create the proper dictionary entries out of the result, witout the stations for now, that is
+                foreach (var system in result) {
+                    var sys = ParseSystem(system);
+                    if (sys == null) {
                         continue;
-                        
+                    }
+                    systemDict[system.name.ToUpper()] = sys;
+                    Logger.Instance.Write("Parsed system " + system.name, Logger.MessageType.Verbose);
+                }
+                result.Clear();
+                Logger.Instance.Write("Finished parsing Systems", Logger.MessageType.Info);
+            }
+            GC.Collect();
+            {
+                var result = GetJsonListFromFile<JSONModel.Station>(stationsFile);
+                foreach(var station in result) {
+                    var stat = ParseStation(station);
+                    if(stat == null) {
+                        continue;
                     }
                     if (!systemDict.ContainsKey(station.systemName.ToUpper())) {
                         ErrorLog.Add($"Could not add station {station.name} because the system name ({station.systemName}) could not be found in the set up dictionary");
                         continue;
                     }
-                    var economy = GetEconomy(station.economy);
-                    var type = GetStationType(station.type);
-                            
-                    var stationToAdd = new Model.Station() {
-                        Name = station.name,
-                        Economy = economy,
-                        StationType = type,
-                        Facilities = GetFacilities(station.otherServices, economy, station.haveShipyard, station.haveOutfitting),
-                        PadSize = GetLandingPadSize(type),
-                        Distance = (float)station.distanceToArrival
-                    };
-                    systemDict[station.systemName.ToUpper()].Stations.Add(stationToAdd);
+                    systemDict[station.systemName.ToUpper()].Stations.Add(stat);
                     Logger.Instance.Write($"Parsed station {station.name} from the {station.systemName} system.", Logger.MessageType.Verbose);
-
                 }
-            }
 
+            }
             PrintErrorLog();
-           
-            
             return systemDict;
             
         }
@@ -167,6 +131,27 @@ namespace OrcaBotScheduledUpdate
                 Security = GetSecurityFromString(sys.security)
             };
         
+        }
+        private static Model.Station ParseStation(JSONModel.Station station) {
+            if(station.name == null || station.distanceToArrival == null || station.economy == null) {
+                var stationName = (station.name == null) ? "a station" : $"the {station.name} station";
+                var system = (station.systemName == null) ? "a system" : $"the {station.systemName} system";
+                ErrorLog.Add($"Could not add {stationName} in {system}");
+                return null;
+            }
+            var economy = GetEconomy(station.economy);
+            var type = GetStationType(station.type);
+            var facilities = GetFacilities(station.otherServices, economy, station.haveShipyard, station.haveOutfitting);
+
+
+            return new Model.Station() {
+                Name = station.name,
+                Economy = economy,
+                StationType = type,
+                Facilities = facilities,
+                PadSize = GetLandingPadSize(type),
+                Distance = (float)station.distanceToArrival
+            };
         }
 
         private static Model.LandingPadSize GetLandingPadSize(Model.StationType st) {
@@ -263,7 +248,7 @@ namespace OrcaBotScheduledUpdate
 
         }
 
-       private static void PrintErrorLog() {
+        private static void PrintErrorLog() {
             if (ErrorLog.Count == 0) {
                 Logger.Instance.Write("No Errors found when parsing the data.", Logger.MessageType.Info);
             }
@@ -274,6 +259,22 @@ namespace OrcaBotScheduledUpdate
                 }
             }
         }
+
+        private static IList<T> GetJsonListFromFile<T>(string path) {
+            using (StreamReader sr = File.OpenText(path)) {
+                using (JsonReader jtr = new JsonTextReader(sr)) {
+                    JsonSerializerSettings jss = new JsonSerializerSettings {
+                        NullValueHandling = NullValueHandling.Ignore,
+                        MissingMemberHandling = MissingMemberHandling.Ignore
+                    };
+                    JsonSerializer js = JsonSerializer.Create(jss);
+                    return js.Deserialize<List<T>>(jtr);
+                  
+                }
+            }
+        }
+
+
 
 
 
