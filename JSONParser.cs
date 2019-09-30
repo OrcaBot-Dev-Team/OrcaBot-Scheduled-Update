@@ -4,7 +4,10 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-
+using Orcabot.Types;
+using Orcabot.Helpers;
+using Orcabot.Types.Enums;
+using System.Linq;
 
 
 /*
@@ -43,8 +46,8 @@ namespace OrcaBotScheduledUpdate
     static class JSONParser
     {
         static List<string> ErrorLog = new List<string>();
-        public static Dictionary<string, Model.System> Parse(string stationsFile, string populatedFile) {
-            Dictionary<string, Model.System> systemDict = new Dictionary<string, Model.System>();
+        public static Dictionary<string, Orcabot.Types.System> Parse(string stationsFile, string populatedFile) {
+            Dictionary<string, Orcabot.Types.System> systemDict = new Dictionary<string, Orcabot.Types.System>();
 
             {
                 var result = GetJsonListFromFile<JSONModel.System>(populatedFile);
@@ -84,55 +87,25 @@ namespace OrcaBotScheduledUpdate
         public static string Stringify<T>(Dictionary<string,T> dict) {
             return JsonConvert.SerializeObject(dict, Formatting.None);
         }
-        static Model.Economy GetEconomy(string s) {
-            if(string.IsNullOrEmpty(s)) {
-                return Model.Economy.Unknown;
-            }
-            switch (s.ToLower()) {
-                case "extraction": return Model.Economy.Extraction;
-                case "refinery": return Model.Economy.Refinery;
-                case "industrial": return Model.Economy.Industrial;
-                case "high tech": return Model.Economy.High_Tech;
-                case "agriculture": return Model.Economy.Agriculture;
-                case "terraforming": return Model.Economy.Terraforming;
-                case "tourism": return Model.Economy.Tourism;
-                case "service": return Model.Economy.Service;
-                case "military": return Model.Economy.Military;
-                case "colony": return Model.Economy.Colony;
-                case "rescue": return Model.Economy.Rescue;
-                case "damaged": return Model.Economy.Damaged;
-                case "repair": return Model.Economy.Repair;
-                default: return Model.Economy.Unknown;
-            } 
-        }
-        static Model.StationType GetStationType(string s) {
-            if (string.IsNullOrEmpty(s)) {
-                return Model.StationType.Unknown;
-            }
-            switch (s.ToLower()) {
-                case "planetary outpost": return Model.StationType.Surface_Station;
-                case "orbis starport": return Model.StationType.Orbis;
-                case "ocellus starport": return Model.StationType.Ocellus;
-                case "coriolis starport": return Model.StationType.Coriolis;
-                case "mega ship": return Model.StationType.Mega_Ship;
-                case "outpost": return Model.StationType.Outpost;
-                case "asteroid base": return Model.StationType.Asteroid_Base;
-                default: return Model.StationType.Unknown;
-            }
-        }
-        private static Model.System ParseSystem(JSONModel.System sys) {
+       
+        private static Orcabot.Types.System ParseSystem(JSONModel.System sys) {
             if(sys.name == null || sys.x == null|| sys.y == null || sys.z == null) {
                 ErrorLog.Add(("Could not add ") + ((sys.name == null) ? "a" : ($"the {sys.name}") + " system."));
                 return null;
             }
-            return new Model.System() {
+            return new Orcabot.Types.System() {
                 Name = sys.name,
-                Position = new Tuple<float, float, float>(sys.x, sys.y, sys.z),
-                Security = GetSecurityFromString(sys.security)
+                Coordinate = new Coordinate {
+                    X = sys.x,
+                    Y = sys.y,
+                    Z = sys.z
+                },
+                
+                SystemSecurity = GetSecurityFromString(sys.security)
             };
         
         }
-        private static Model.Station ParseStation(JSONModel.Station station) {
+        private static Station ParseStation(JSONModel.Station station) {
             if(station.name == null || station.distanceToArrival == null || station.economy == null) {
                 var stationName = (station.name == null) ? "a station" : $"the {station.name} station";
                 var system = (station.systemName == null) ? "a system" : $"the {station.systemName} system";
@@ -144,48 +117,50 @@ namespace OrcaBotScheduledUpdate
             var facilities = GetFacilities(station.otherServices, economy, station.haveShipyard, station.haveOutfitting);
 
 
-            return new Model.Station() {
+            return new Station() {
                 Name = station.name,
                 Economy = economy,
-                StationType = type,
-                Facilities = facilities,
-                PadSize = GetLandingPadSize(type),
+                
+                Type = type,
+                
+                StationFacilities = facilities,
+              
                 Distance = (float)station.distanceToArrival
             };
         }
 
-        private static Model.LandingPadSize GetLandingPadSize(Model.StationType st) {
-            switch (st) {
-                case Model.StationType.Asteroid_Base:
-                case Model.StationType.Coriolis:
-                case Model.StationType.Mega_Ship:
-                case Model.StationType.Ocellus:
-                case Model.StationType.Orbis:
-                case Model.StationType.Surface_Station:
-                   return Model.LandingPadSize.Large; 
-                case Model.StationType.Outpost:
-                    return Model.LandingPadSize.Medium; 
+        private static PadSize GetLandingPadSize(Station st) {
+            switch (st.Type) {
+                case StationType.AsteroidBase:
+                case StationType.Coriolis:
+                case StationType.MegaShip:
+                case StationType.Ocellus:
+                case StationType.Orbis:
+                case StationType.SurfaceStation:
+                   return PadSize.Large; 
+                case StationType.Outpost:
+                    return PadSize.Medium; 
                 default:
-                   return Model.LandingPadSize.None; 
+                   return PadSize.None; 
             }
         }
 
-        private static Model.Security GetSecurityFromString(string securityString) {
+        private static Security GetSecurityFromString(string securityString) {
             if (securityString == null) {
-                return Model.Security.Unknown;
+                return Security.Unknown;
             }
             else {
                 switch (securityString.ToLower()) {
                     case "high":
-                        return Model.Security.High;
+                        return Security.High;
                     case "medium":
-                        return Model.Security.Medium;
+                        return Security.Medium;
                     case "low":
-                        return Model.Security.Low; 
+                        return Security.Low; 
                     case "anarchy":
-                        return Model.Security.Anarchy;
+                        return Security.Anarchy;
                     default:
-                        return Model.Security.Unknown; 
+                        return Security.Unknown; 
                 }
             }
         }
@@ -195,53 +170,54 @@ namespace OrcaBotScheduledUpdate
         /// <param name="facilities">Array of facilities as strings</param>
         /// <param name="economy">In case it is a Material Trader, the Economy is needed to identify the type. If none is given, Model.Facilities.Unknown will be returned</param>
         /// <returns></returns>
-        static Model.Facilities[] GetFacilities(string[] facilities, Model.Economy economy = Model.Economy.Unknown, bool hasShipyard = false, bool hasOutfitting = false) {
-            HashSet<Model.Facilities> returnHashSet = new HashSet<Model.Facilities>();
+        static List<StationFacility> GetFacilities(string[] facilities, Economy economy = Economy.Unknown, bool hasShipyard = false, bool hasOutfitting = false) {
+            List<StationFacility> returnList = new List<StationFacility>();
             foreach (var f in facilities) {
                 var facility = GetFacility(f);
-                if (facility != Model.Facilities.Unknown) {
-                    returnHashSet.Add(facility);
+                if (facility != StationFacility.Unknown) {
+                    returnList.Add(facility);
                 }
             }
             if (hasShipyard) {
-                returnHashSet.Add(Model.Facilities.Shipyard);
+                returnList.Add(StationFacility.Shipyard);
             }
             if (hasOutfitting) {
-                returnHashSet.Add(Model.Facilities.Outfitting);
+                returnList.Add(StationFacility.Outfitting);
             }
-            Model.Facilities[] returnArray = new Model.Facilities[returnHashSet.Count];
-            returnHashSet.CopyTo(returnArray);
-            return returnArray;
+
+
+            return returnList.Distinct().ToList();
 
 
 
-            Model.Facilities GetFacility(string s) {
+
+            StationFacility GetFacility(string s) {
                 if (string.IsNullOrEmpty(s)) {
-                    return Model.Facilities.Unknown;
+                    return StationFacility.Unknown;
                 }
                 if (s.ToLower() == "material trader") {
 
                     return GetMaterialTraderType();
                 }
                 switch (s.ToLower()) {
-                    case "interstellar factors": return Model.Facilities.InterstellarFactors;
-                    case "repair": return Model.Facilities.Repair;
-                    case "restock": return Model.Facilities.Restock;
-                    case "black market": return Model.Facilities.Black_Market;
-                    default: return Model.Facilities.Unknown;
+                    case "interstellar factors": return StationFacility.InterstellarFactors;
+                    case "repair": return StationFacility.Repair;
+                    case "restock": return StationFacility.Restock;
+                    case "black market": return StationFacility.BlackMarket;
+                    default: return StationFacility.Unknown;
                 }
-                Model.Facilities GetMaterialTraderType() {
+                StationFacility GetMaterialTraderType() {
                     switch (economy) {
-                        case Model.Economy.Refinery:
-                        case Model.Economy.Extraction:
-                            return Model.Facilities.Trader_Raw;
-                        case Model.Economy.Industrial:
-                            return Model.Facilities.Trader_Manufactured;
-                        case Model.Economy.High_Tech:
-                        case Model.Economy.Military:
-                            return Model.Facilities.Trader_Encoded;
+                        case Economy.Refinery:
+                        case Economy.Extraction:
+                            return StationFacility.TraderRaw;
+                        case Economy.Industrial:
+                            return StationFacility.TraderManufactured;
+                        case Economy.HighTech:
+                        case Economy.Military:
+                            return StationFacility.TraderEncoded;
                         default:
-                            return Model.Facilities.Unknown;
+                            return StationFacility.Unknown;
                     }
                 }
             }
@@ -257,6 +233,42 @@ namespace OrcaBotScheduledUpdate
                 foreach (var err in ErrorLog) {
                     Logger.Instance.Write(err, Logger.MessageType.Error);
                 }
+            }
+        }
+        private static Economy GetEconomy(string s) {
+            if (string.IsNullOrEmpty(s)) {
+                return Economy.Unknown; 
+            }
+            switch (s.ToLower()) {
+                case "extraction": return Economy.Extraction;
+                case "refinery": return Economy.Refinery;
+                case "industrial": return Economy.Industrial;
+                case "high tech": return Economy.HighTech;
+                case "agriculture": return Economy.Agriculture;
+                case "terraforming": return Economy.Terraforming;
+                case "tourism": return Economy.Tourism;
+                case "service": return Economy.Service;
+                case "military": return Economy.Military;
+                case "colony": return Economy.Colony;
+                case "rescue": return Economy.Rescue;
+                case "damaged": return Economy.Damaged;
+                case "repair": return Economy.Repair;
+                default: return Economy.Unknown;
+            }
+        }
+        private static StationType GetStationType(string s) {
+            if (string.IsNullOrEmpty(s)) {
+                return StationType.Unknown;
+            }
+            switch (s.ToLower()) {
+                case "planetary outpost": return StationType.SurfaceStation;
+                case "orbis starport": return StationType.Orbis;
+                case "ocellus starport": return StationType.Ocellus;
+                case "coriolis starport": return StationType.Coriolis;
+                case "mega ship": return StationType.MegaShip;
+                case "outpost": return StationType.Outpost;
+                case "asteroid base": return StationType.AsteroidBase;
+                default: return StationType.Unknown;
             }
         }
 
