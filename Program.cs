@@ -43,7 +43,7 @@ namespace OrcaBotScheduledUpdate
                 Logger.Instance.Write("Finished download...", Logger.MessageType.Info);
                 var dict = JSONParser.Parse(stationsFile, populatedFile);
                 Export(dict,"populatedSystemsWithStations");
-                Export(FilterMaterialTraders(dict), "systemsWithMaterialTraders");
+                
                 Logger.Instance.Write("The program has successfully reached its end. Press any key to exit...", Logger.MessageType.Info);
                 Environment.Exit(0);
 
@@ -96,7 +96,7 @@ namespace OrcaBotScheduledUpdate
 
      
 
-        private static void Export(Dictionary<string,Orcabot.Types.System> dictionary,string filename) {
+        private static void Export(Dictionary<string,Orcabot.Types.StarSystem> dictionary,string filename) {
             //Generate a JSON out of the dict
             {
                 string json = JSONParser.Stringify(dictionary);
@@ -104,15 +104,7 @@ namespace OrcaBotScheduledUpdate
                 Logger.Instance.Write("Finished creating output json. It can be found at " + Path.Combine(options.Path, $"{filename}.json"), Logger.MessageType.Info);
             }         
         }
-        private static Dictionary<string,Orcabot.Types.System> FilterMaterialTraders(Dictionary<string,Orcabot.Types.System> dict) {
-            var retDict = new Dictionary<string, Orcabot.Types.System>();
-            foreach (var entry in dict) {
-                 if (syshelp.HasMatTrader(entry.Value)){
-                    retDict.Add(entry.Key,entry.Value);
-                 }
-            }
-            return retDict;
-        }
+   
 
         static void HandleException(Exception e,bool killApp = false) {
             Logger.Instance.Write("An exception has been thrown. Please check the logs under " + (new Uri(new Uri(Environment.CurrentDirectory), "logs\t\t" + e.Message)), Logger.MessageType.Critical);

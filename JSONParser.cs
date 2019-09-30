@@ -10,44 +10,14 @@ using Orcabot.Types.Enums;
 using System.Linq;
 
 
-/*
- *  var systemDefinition = new[] { new { name = "", x = 0f, y = 0f, z = 0f, security = "" } };
-            var stationDefinition = new[] { new { type = "", name = "", distanceToArrival = 0f, economy = "", haveShipyard = false, haveOutfitting = false, otherServices = new[] { "" },systemName="" } };
-            var settings = new JsonSerializerSettings {
-                NullValueHandling = NullValueHandling.Ignore,
-                MissingMemberHandling = MissingMemberHandling.Ignore
-            };
-            JArray systemArray = JArray.Parse(populatedSystemsData);
-            foreach(var system in systemArray) {
-                int Security = (int)system["security_id"];
-                Model.Security security;
-                switch (Security) {
-                    case 64: security = Model.Security.Anarchy; break;
-                    case 48: security = Model.Security.High; break;
-                    case 32: security = Model.Security.Medium; break;
-                    case 16: security = Model.Security.Low; break;
-                    default: security = Model.Security.Anarchy; break;
-                }
-
-                systemDict.Add(system["name"].ToString().ToUpper(), new Model.System {
-                    Position = Tuple.Create<float, float, float>((float)system["x"], (float)system["y"], (float)system["z"]),
-                    Security = security
-                });
-            }
-
-            //var systemResult = JsonConvert.DeserializeAnonymousType(populatedSystemsData, systemDefinition,settings);
-            //var stationResult = JArray.Parse(stationsData);
-          
-            var x = 0;
-*/
 
 namespace OrcaBotScheduledUpdate
 {
     static class JSONParser
     {
         static List<string> ErrorLog = new List<string>();
-        public static Dictionary<string, Orcabot.Types.System> Parse(string stationsFile, string populatedFile) {
-            Dictionary<string, Orcabot.Types.System> systemDict = new Dictionary<string, Orcabot.Types.System>();
+        public static Dictionary<string, StarSystem> Parse(string stationsFile, string populatedFile) {
+            Dictionary<string, StarSystem> systemDict = new Dictionary<string, StarSystem>();
 
             {
                 var result = GetJsonListFromFile<JSONModel.System>(populatedFile);
@@ -88,20 +58,20 @@ namespace OrcaBotScheduledUpdate
             return JsonConvert.SerializeObject(dict, Formatting.None);
         }
        
-        private static Orcabot.Types.System ParseSystem(JSONModel.System sys) {
+        private static Orcabot.Types.StarSystem ParseSystem(JSONModel.System sys) {
             if(sys.name == null || sys.x == null|| sys.y == null || sys.z == null) {
                 ErrorLog.Add(("Could not add ") + ((sys.name == null) ? "a" : ($"the {sys.name}") + " system."));
                 return null;
             }
-            return new Orcabot.Types.System() {
+            return new StarSystem() {
+
                 Name = sys.name,
-                Coordinate = new Coordinate {
+                Coordinate = new System.Numerics.Vector3 {
                     X = sys.x,
                     Y = sys.y,
                     Z = sys.z
                 },
-                
-                SystemSecurity = GetSecurityFromString(sys.security)
+                Security = GetSecurityFromString(sys.security)
             };
         
         }
@@ -123,7 +93,7 @@ namespace OrcaBotScheduledUpdate
                 
                 Type = type,
                 
-                StationFacilities = facilities,
+                Facilities = facilities,
               
                 Distance = (float)station.distanceToArrival
             };
@@ -145,22 +115,22 @@ namespace OrcaBotScheduledUpdate
             }
         }
 
-        private static Security GetSecurityFromString(string securityString) {
+        private static SystemSecurity GetSecurityFromString(string securityString) {
             if (securityString == null) {
-                return Security.Unknown;
+                return SystemSecurity.Unknown;
             }
             else {
                 switch (securityString.ToLower()) {
                     case "high":
-                        return Security.High;
+                        return SystemSecurity.High;
                     case "medium":
-                        return Security.Medium;
+                        return SystemSecurity.Medium;
                     case "low":
-                        return Security.Low; 
+                        return SystemSecurity.Low; 
                     case "anarchy":
-                        return Security.Anarchy;
+                        return SystemSecurity.Anarchy;
                     default:
-                        return Security.Unknown; 
+                        return SystemSecurity.Unknown; 
                 }
             }
         }
@@ -170,23 +140,21 @@ namespace OrcaBotScheduledUpdate
         /// <param name="facilities">Array of facilities as strings</param>
         /// <param name="economy">In case it is a Material Trader, the Economy is needed to identify the type. If none is given, Model.Facilities.Unknown will be returned</param>
         /// <returns></returns>
-        static List<StationFacility> GetFacilities(string[] facilities, Economy economy = Economy.Unknown, bool hasShipyard = false, bool hasOutfitting = false) {
-            List<StationFacility> returnList = new List<StationFacility>();
+        static HashSet<StationFacility> GetFacilities(string[] facilities, Economy economy = Economy.Unknown, bool hasShipyard = false, bool hasOutfitting = false) {
+            HashSet<StationFacility> returnHash = new HashSet<StationFacility>();
             foreach (var f in facilities) {
                 var facility = GetFacility(f);
                 if (facility != StationFacility.Unknown) {
-                    returnList.Add(facility);
+                    returnHash.Add(facility);
                 }
             }
             if (hasShipyard) {
-                returnList.Add(StationFacility.Shipyard);
+                returnHash.Add(StationFacility.Shipyard);
             }
             if (hasOutfitting) {
-                returnList.Add(StationFacility.Outfitting);
+                returnHash.Add(StationFacility.Outfitting);
             }
-
-
-            return returnList.Distinct().ToList();
+            return returnHash;
 
 
 
