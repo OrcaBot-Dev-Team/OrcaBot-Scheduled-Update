@@ -6,7 +6,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
-
+using syshelp = Orcabot.Helpers.SystemHelper;
 namespace OrcaBotScheduledUpdate
 {
     class Program
@@ -41,7 +41,9 @@ namespace OrcaBotScheduledUpdate
                     throw;
                 }
                 Logger.Instance.Write("Finished download...", Logger.MessageType.Info);
-                Export(JSONParser.Parse(stationsFile, populatedFile));
+                var dict = JSONParser.Parse(stationsFile, populatedFile);
+                Export(dict,"populatedSystemsWithStations");
+                
                 Logger.Instance.Write("The program has successfully reached its end. Press any key to exit...", Logger.MessageType.Info);
                 Environment.Exit(0);
 
@@ -94,23 +96,15 @@ namespace OrcaBotScheduledUpdate
 
      
 
-        private static void Export(Dictionary<string,Model.System> dictionary) {
+        private static void Export(Dictionary<string,Orcabot.Types.StarSystem> dictionary,string filename) {
             //Generate a JSON out of the dict
             {
                 string json = JSONParser.Stringify(dictionary);
-                File.WriteAllText(Path.Combine(options.Path, "populatedSystemsWithStations.json"), json);
-                Logger.Instance.Write("Finished creating output json. It can be found at " + Path.Combine(options.Path, "populatedSystemsWithStations.json"), Logger.MessageType.Info);
-            }
-            //Generate the Serialized Object
-            {
-                IFormatter formatter = new BinaryFormatter();
-                Stream stream = new FileStream(Path.Combine(options.Path, "populatedSystemsWithStations.bin"), FileMode.Create, FileAccess.Write, FileShare.None);
-                formatter.Serialize(stream, dictionary);
-                stream.Close();
-                Logger.Instance.Write("Finished creating output serialized binary file. It can be found at " + Path.Combine(options.Path, "populatedSystemsWithStations.bin"), Logger.MessageType.Info);
-
-            }
+                File.WriteAllText(Path.Combine(options.Path, $"{filename}.json"), json);
+                Logger.Instance.Write("Finished creating output json. It can be found at " + Path.Combine(options.Path, $"{filename}.json"), Logger.MessageType.Info);
+            }         
         }
+   
 
         static void HandleException(Exception e,bool killApp = false) {
             Logger.Instance.Write("An exception has been thrown. Please check the logs under " + (new Uri(new Uri(Environment.CurrentDirectory), "logs\t\t" + e.Message)), Logger.MessageType.Critical);
